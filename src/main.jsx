@@ -23,6 +23,8 @@ const PLATFORMS = ['X', 'Threads', 'IG', 'Everytime', '기타'];
 const STORAGE_KEY = 'meitu-team-b-submissions';
 const SHEETS_ENDPOINT = import.meta.env.VITE_SUBMISSION_ENDPOINT || '';
 const SHEET_CSV_URL = import.meta.env.VITE_SHEET_CSV_URL || '';
+const MAX_SCREENSHOT_SIDE = 1400;
+const LOCAL_SCREENSHOT_LIMIT = 900000;
 
 const initialForm = {
   name: '',
@@ -102,12 +104,17 @@ function App() {
       return;
     }
 
-    const dataUrl = await toDataUrl(file);
-    setForm((current) => ({
-      ...current,
-      screenshotName: file.name,
-      screenshotData: dataUrl
-    }));
+    try {
+      const dataUrl = await compressImage(file);
+      setForm((current) => ({
+        ...current,
+        screenshotName: file.name,
+        screenshotData: dataUrl
+      }));
+      setStatus('이미지가 첨부되었습니다.');
+    } catch {
+      setStatus('이미지를 처리하지 못했어요. 다른 캡처 파일로 다시 시도해 주세요.');
+    }
   }
 
   async function submitForm(event) {
@@ -149,9 +156,16 @@ function App() {
         });
       }
 
-      const next = [item, ...submissions];
+      const localItem = makeLocalSubmission(item);
+      const next = [localItem, ...submissions];
       setSubmissions(next);
-      saveStoredSubmissions(next);
+      try {
+        saveStoredSubmissions(next);
+      } catch {
+        const lighterNext = [makeLocalSubmission(item, true), ...submissions.map((submission) => makeLocalSubmission(submission, true))];
+        setSubmissions(lighterNext);
+        saveStoredSubmissions(lighterNext);
+      }
       setStatus('제출되었습니다. 담당자 대시보드에도 바로 반영됐어요.');
       setForm(initialForm);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -535,13 +549,39 @@ function validateForm(type, form) {
   return '';
 }
 
-function toDataUrl(file) {
+function compressImage(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
+    reader.onload = () => {
+      const image = new Image();
+      image.onload = () => {
+        const scale = Math.min(1, MAX_SCREENSHOT_SIDE / Math.max(image.width, image.height));
+        const width = Math.max(1, Math.round(image.width * scale));
+        const height = Math.max(1, Math.round(image.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext('2d');
+        context.drawImage(image, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.78));
+      };
+      image.onerror = reject;
+      image.src = reader.result;
+    };
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+function makeLocalSubmission(item, forceRemoveScreenshot = false) {
+  const shouldKeepScreenshot = item.screenshotData
+    && item.screenshotData.length <= LOCAL_SCREENSHOT_LIMIT
+    && !forceRemoveScreenshot;
+
+  return {
+    ...item,
+    screenshotData: shouldKeepScreenshot ? item.screenshotData : ''
+  };
 }
 
 function toCsv(items) {
