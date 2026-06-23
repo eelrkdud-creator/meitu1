@@ -7,12 +7,15 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1"
   },
+  "engines": {
+    "node": ">=18.18.0"
+  },
   "dependencies": {
-    "@vitejs/plugin-react": "latest",
-    "vite": "latest",
-    "react": "latest",
-    "react-dom": "latest",
-    "lucide-react": "latest"
+    "@vitejs/plugin-react": "4.4.1",
+    "vite": "6.3.5",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "lucide-react": "1.21.0"
   },
   "devDependencies": {}
 }
